@@ -51,9 +51,9 @@ def run(schedule_day: str | None = None, debug: bool = False):
     topic = sched.get("topic", schedule_day)
     query = sched.get("query", "")
 
-    slack_webhook = os.environ.get("SLACK_WEBHOOK_URL", "")
+    slack_webhook = os.environ.get("SLACK_WEBHOOK", "")
     if not slack_webhook:
-        logger.error("SLACK_WEBHOOK_URL env var is required")
+        logger.error("SLACK_WEBHOOK env var is required")
         sys.exit(1)
 
     logger.info("Searching PubMed | day=%s query=%r top_n=%d days_back=%d debug=%s",

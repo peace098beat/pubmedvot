@@ -26,7 +26,7 @@ def test_gemini_translate():
 
 @pytest.mark.api
 def test_slack_send():
-    webhook = os.environ["SLACK_WEBHOOK_URL"]
+    webhook = os.environ["SLACK_WEBHOOK"]
     article = Article(pmid="1", title="Test", authors=[], abstract="Test abstract.", pub_date="2024-01-01")
     ok = send_to_slack(webhook, [article], topic="Test", translated=False, debug=True)
     assert ok is True

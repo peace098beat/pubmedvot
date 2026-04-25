@@ -44,6 +44,6 @@ jobs:
       - name: Run PubMed notify
         env:
           SCHEDULE_DAY: ${{ steps.day.outputs.day }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python -m src.main
