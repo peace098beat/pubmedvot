@@ -10,6 +10,15 @@ import requests
 EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 _REQUEST_INTERVAL = 0.4  # 匿名アクセス: 3req/s 以下
 
+# NCBI policy: include tool name, email, and User-Agent in all requests
+_NCBI_PARAMS = {
+    "tool": "pubmedvot",
+    "email": "pubmedvot@example.com",
+}
+_HEADERS = {
+    "User-Agent": "pubmedvot/1.0 (pubmedvot@example.com)",
+}
+
 
 @dataclass
 class Article:
@@ -44,13 +53,21 @@ def search_pubmed(query: str, max_results: int = 10, days_back: int = 7) -> List
 
 def _esearch(query: str, retmax: int) -> List[str]:
     params = {
+        **_NCBI_PARAMS,
         "db": "pubmed",
         "term": query,
         "retmax": retmax,
         "retmode": "json",
         "sort": "relevance",
     }
-    resp = requests.get(f"{EUTILS_BASE}/esearch.fcgi", params=params, timeout=30)
+    resp = requests.get(f"{EUTILS_BASE}/esearch.fcgi", params=params,
+                        headers=_HEADERS, timeout=30)
+    if resp.status_code == 403:
+        raise requests.HTTPError(
+            "403 Forbidden: NCBI blocked this IP. "
+            "Register an API key at https://www.ncbi.nlm.nih.gov/account/",
+            response=resp,
+        )
     resp.raise_for_status()
     data = resp.json()
     return data.get("esearchresult", {}).get("idlist", [])
@@ -58,12 +75,14 @@ def _esearch(query: str, retmax: int) -> List[str]:
 
 def _efetch(pmids: List[str]) -> List[Article]:
     params = {
+        **_NCBI_PARAMS,
         "db": "pubmed",
         "id": ",".join(pmids),
         "retmode": "xml",
         "rettype": "abstract",
     }
-    resp = requests.get(f"{EUTILS_BASE}/efetch.fcgi", params=params, timeout=30)
+    resp = requests.get(f"{EUTILS_BASE}/efetch.fcgi", params=params,
+                        headers=_HEADERS, timeout=30)
     resp.raise_for_status()
     return _parse_xml(resp.text)
 
