@@ -1,0 +1,74 @@
+name: Test & Integration Check
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: Unit Tests (mock)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: pytest tests/ -v --ignore=tests/test_integration.py
+
+  integration-tests:
+    name: Integration Tests (real API)
+    runs-on: ubuntu-latest
+    # シークレットが登録されていない fork では実行しない
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run integration tests
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: pytest tests/test_integration.py -v -m integration
+
+  debug-slack-run:
+    name: Debug Slack Run (1 article on push)
+    runs-on: ubuntu-latest
+    # シークレットが登録されていない fork では実行しない
+    if: ${{ github.event_name == 'push' && (github.event.pull_request.head.repo.full_name == github.repository || github.event.pull_request == null) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Debug run – send 1 article to Slack (monday schedule)
+        env:
+          SCHEDULE_DAY: monday
+          DEBUG_MODE: "true"
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -m src.main

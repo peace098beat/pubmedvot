@@ -1,0 +1,22 @@
+default:
+  top_n: 10
+  days_back: 7
+  translate: true
+
+schedules:
+  monday:
+    topic: "Sleep Research"
+    query: "sleep[Title/Abstract]"
+    top_n: 10
+    days_back: 7
+    translate: true
+  tuesday:
+    topic: "ODI Research"
+    query: "ODI[Title/Abstract] OR oxygen desaturation index[Title/Abstract]"
+    top_n: 10
+    days_back: 7
+    translate: true
+
+debug:
+  top_n: 1
+  translate: false

@@ -1,0 +1,49 @@
+name: PubMed Weekly Notify
+
+on:
+  schedule:
+    # 月曜日 09:00 JST = UTC 00:00
+    - cron: '0 0 * * 1'
+    # 火曜日 09:00 JST = UTC 00:00
+    - cron: '0 0 * * 2'
+  workflow_dispatch:
+    inputs:
+      schedule_day:
+        description: 'Run schedule for day (monday / tuesday)'
+        required: true
+        default: 'monday'
+        type: choice
+        options:
+          - monday
+          - tuesday
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Determine schedule day
+        id: day
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "day=${{ github.event.inputs.schedule_day }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "day=$(date -u +%A | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run PubMed notify
+        env:
+          SCHEDULE_DAY: ${{ steps.day.outputs.day }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -m src.main
