@@ -1,4 +1,4 @@
-name: Test & Integration Check
+name: Test
 
 on:
   push:
@@ -7,8 +7,7 @@ on:
   pull_request:
 
 jobs:
-  integration-tests:
-    name: Integration Tests (real API)
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,43 +21,5 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run integration tests
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: pytest tests/test_integration.py -v -m integration
-
-  debug-slack-run:
-    name: Debug Slack Run (1 article on push)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Check required secrets
-        run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "SLACK_WEBHOOK_URL not configured – skipping debug run"
-            exit 0
-          fi
-          echo "Secrets present, running debug send..."
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Debug run – send 1 article to Slack (monday schedule)
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
-        env:
-          SCHEDULE_DAY: monday
-          DEBUG_MODE: "true"
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python -m src.main
+      - name: Run tests
+        run: pytest tests/ -v
