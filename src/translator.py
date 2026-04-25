@@ -4,32 +4,25 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Try models in priority order; first available and working model is used
 _CANDIDATE_MODELS = [
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
     "gemini-1.5-flash",
     "gemini-1.5-flash-latest",
-    "gemini-pro",
 ]
 
 
-def _pick_model(genai):
-    """Return the first available GenerativeModel that supports content generation."""
+def _pick_model(client) -> str:
+    """Return the first available model name that supports content generation."""
     try:
-        available = {
-            m.name.replace("models/", "")
-            for m in genai.list_models()
-            if "generateContent" in getattr(m, "supported_generation_methods", [])
-        }
+        available = {m.name.replace("models/", "") for m in client.models.list()}
         for name in _CANDIDATE_MODELS:
             if name in available:
                 logger.debug("Using Gemini model: %s", name)
-                return genai.GenerativeModel(name)
+                return name
     except Exception as exc:
         logger.debug("Could not list Gemini models (%s), trying default", exc)
-    # Fallback: try the first candidate anyway
-    return genai.GenerativeModel(_CANDIDATE_MODELS[0])
+    return _CANDIDATE_MODELS[0]
 
 
 def translate_to_japanese(text: str) -> tuple[str, bool]:
@@ -47,15 +40,15 @@ def translate_to_japanese(text: str) -> tuple[str, bool]:
         return text, False
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = _pick_model(genai)
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        model_name = _pick_model(client)
         prompt = (
             "以下の英語テキストを自然な日本語に翻訳してください。"
             "医学・研究論文の翻訳です。翻訳文のみ出力してください。\n\n"
             f"{text}"
         )
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=model_name, contents=prompt)
         translated = response.text.strip()
         return translated, True
     except Exception as exc:
