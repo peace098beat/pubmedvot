@@ -28,8 +28,6 @@ jobs:
   integration-tests:
     name: Integration Tests (real API)
     runs-on: ubuntu-latest
-    # シークレットが登録されていない fork では実行しない
-    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,8 +49,7 @@ jobs:
   debug-slack-run:
     name: Debug Slack Run (1 article on push)
     runs-on: ubuntu-latest
-    # シークレットが登録されていない fork では実行しない
-    if: ${{ github.event_name == 'push' && (github.event.pull_request.head.repo.full_name == github.repository || github.event.pull_request == null) }}
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +62,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Check required secrets
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not configured – skipping debug run"
+            exit 0
+          fi
+          echo "Secrets present, running debug send..."
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
       - name: Debug run – send 1 article to Slack (monday schedule)
+        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         env:
           SCHEDULE_DAY: monday
           DEBUG_MODE: "true"

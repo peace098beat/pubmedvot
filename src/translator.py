@@ -1,9 +1,35 @@
 """Gemini API translation client with fallback."""
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Try models in priority order; first available and working model is used
+_CANDIDATE_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-pro",
+]
+
+
+def _pick_model(genai):
+    """Return the first available GenerativeModel that supports content generation."""
+    try:
+        available = {
+            m.name.replace("models/", "")
+            for m in genai.list_models()
+            if "generateContent" in getattr(m, "supported_generation_methods", [])
+        }
+        for name in _CANDIDATE_MODELS:
+            if name in available:
+                logger.debug("Using Gemini model: %s", name)
+                return genai.GenerativeModel(name)
+    except Exception as exc:
+        logger.debug("Could not list Gemini models (%s), trying default", exc)
+    # Fallback: try the first candidate anyway
+    return genai.GenerativeModel(_CANDIDATE_MODELS[0])
 
 
 def translate_to_japanese(text: str) -> tuple[str, bool]:
@@ -23,7 +49,7 @@ def translate_to_japanese(text: str) -> tuple[str, bool]:
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = _pick_model(genai)
         prompt = (
             "以下の英語テキストを自然な日本語に翻訳してください。"
             "医学・研究論文の翻訳です。翻訳文のみ出力してください。\n\n"

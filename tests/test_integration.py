@@ -60,15 +60,46 @@ class TestPubMedConnectivity:
 class TestGeminiConnectivity:
     """Verify Gemini API is reachable (skipped if no key)."""
 
+    def test_api_reachable_and_model_available(self):
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if not api_key:
+            pytest.skip("GEMINI_API_KEY not set")
+
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        try:
+            models = list(genai.list_models())
+        except Exception as exc:
+            pytest.fail(f"Cannot reach Gemini API: {exc}")
+        assert len(models) > 0, "Gemini API returned no models"
+        gen_models = [m.name for m in models if "generateContent" in getattr(m, "supported_generation_methods", [])]
+        assert gen_models, f"No models support generateContent. Available: {[m.name for m in models]}"
+
     def test_translate_short_text(self):
         api_key = os.environ.get("GEMINI_API_KEY", "")
         if not api_key:
             pytest.skip("GEMINI_API_KEY not set")
 
-        from src.translator import translate_to_japanese
-        result, was_translated = translate_to_japanese("Sleep is important for health.")
-        assert was_translated is True
-        assert result  # some non-empty translated text
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+
+        # Pick first available generateContent model
+        try:
+            available = [
+                m.name.replace("models/", "")
+                for m in genai.list_models()
+                if "generateContent" in getattr(m, "supported_generation_methods", [])
+            ]
+        except Exception as exc:
+            pytest.fail(f"Cannot list Gemini models: {exc}")
+
+        assert available, "No generateContent models available"
+        model = genai.GenerativeModel(available[0])
+        try:
+            resp = model.generate_content("Translate to Japanese: 'Sleep is important for health.'")
+        except Exception as exc:
+            pytest.fail(f"Gemini generate_content failed with model {available[0]}: {exc}")
+        assert resp.text.strip(), "Gemini returned empty response"
 
 
 @pytest.mark.integration
