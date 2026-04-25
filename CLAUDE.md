@@ -1,75 +1,75 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは、リポジトリ内のコードを操作する際に Claude Code (claude.ai/code) へのガイダンスを提供します。
 
-## Project Purpose
+## プロジェクトの目的
 
-**pubmedvot** is a PubMed → Gemini → Slack pipeline. It fetches recent research papers from NCBI E-utilities, translates titles and abstracts to Japanese via Gemini, and posts formatted summaries to Slack using Block Kit. It runs on a weekly GitHub Actions schedule (Monday & Tuesday at 09:00 JST).
+**pubmedvot** は PubMed → Gemini → Slack パイプラインです。NCBI E-utilities から最新の研究論文を取得し、Gemini でタイトルとアブストラクトを日本語に翻訳して、Block Kit を使用して Slack にフォーマット済みサマリーを投稿します。GitHub Actions のスケジュール（毎週月曜・火曜 09:00 JST）で自動実行されます。
 
-## Toolchain
+## ツールチェーン
 
-This project uses **uv** for dependency management, **ruff** for linting/formatting, and **pytest** for tests. There is no `pip install` or `venv` — always use `uv`.
+依存関係の管理には **uv**、リント・フォーマットには **ruff**、テストには **pytest** を使用します。`pip install` や `venv` は使わず、常に `uv` を使用してください。
 
 ```bash
-uv sync --extra dev          # install all deps including dev
-uv run pytest tests/ -v      # run all unit tests
-uv run pytest tests/test_integration.py -v -m integration  # real-API tests
-uv run ruff check src/ tests/  # lint
-uv run ruff format src/ tests/ # format
+uv sync --extra dev          # dev を含む全依存関係をインストール
+uv run pytest tests/ -v      # ユニットテストを全て実行
+uv run pytest tests/test_integration.py -v -m integration  # 実API テスト
+uv run ruff check src/ tests/  # リント
+uv run ruff format src/ tests/ # フォーマット
 ```
 
-Run a single test file or test:
+単一のテストファイルまたはテストを実行する場合:
 ```bash
 uv run pytest tests/test_pubmed.py -v
 uv run pytest tests/test_pubmed.py::TestSearchPubMed::test_returns_articles -v
 ```
 
-Run the pipeline locally (requires secrets):
+ローカルでパイプラインを実行する場合（シークレットが必要）:
 ```bash
 SCHEDULE_DAY=monday SLACK_WEBHOOK_URL=... GEMINI_API_KEY=... uv run python -m src.main
 DEBUG_MODE=true SCHEDULE_DAY=monday SLACK_WEBHOOK_URL=... uv run python -m src.main
 ```
 
-## Git Workflow
+## Git ワークフロー
 
-**Never push directly to `main`.** All changes must go through a pull request:
-1. Create a feature branch: `git checkout -b feat/your-feature`
-2. Commit changes, then `git push -u origin feat/your-feature`
-3. Open a PR — CI must pass before merging
+**`main` への直接プッシュは禁止です。** すべての変更はプルリクエストを通して行います:
+1. フィーチャーブランチを作成: `git checkout -b feat/your-feature`
+2. 変更をコミットし、`git push -u origin feat/your-feature`
+3. PR を作成 — マージ前に CI が通過していること
 
-## Architecture
+## アーキテクチャ
 
-The pipeline is a linear four-stage orchestration in `src/main.py`:
+パイプラインは `src/main.py` による線形4段階のオーケストレーションです:
 
 ```
-config/settings.yaml  +  env vars (SCHEDULE_DAY, SLACK_WEBHOOK_URL, GEMINI_API_KEY)
+config/settings.yaml  +  環境変数 (SCHEDULE_DAY, SLACK_WEBHOOK_URL, GEMINI_API_KEY)
          ↓
 src/pubmed_client.py   – NCBI E-utilities (esearch JSON → efetch XML → Article dataclass)
          ↓
-src/translator.py      – Gemini API (list_models → pick first generateContent model → translate)
+src/translator.py      – Gemini API (list_models → generateContent 対応モデルを選択 → 翻訳)
          ↓
-src/slack_client.py    – Slack Block Kit (build_blocks → POST to webhook URL)
+src/slack_client.py    – Slack Block Kit (build_blocks → webhook URL へ POST)
 ```
 
-**`config/settings.yaml`** defines per-weekday schedules (`topic`, `query`, `top_n`, `days_back`, `translate`) and a `debug` override (1 article, no translation).
+**`config/settings.yaml`** は曜日ごとのスケジュール（`topic`、`query`、`top_n`、`days_back`、`translate`）と、`debug` オーバーライド（1件・翻訳なし）を定義します。
 
-**`Article` dataclass** (`src/pubmed_client.py`) is the sole data contract between layers: `pmid`, `title`, `authors`, `abstract`, `pub_date`, `url`. Translation mutates `title` and `abstract` in place.
+**`Article` データクラス** (`src/pubmed_client.py`) は各レイヤー間の唯一のデータコントラクトです: `pmid`、`title`、`authors`、`abstract`、`pub_date`、`url`。翻訳処理は `title` と `abstract` をインプレースで書き換えます。
 
-**Gemini model selection** (`src/translator.py`) calls `list_models()` at runtime and picks the first model supporting `generateContent`. Priority order tried: `gemini-2.0-flash`, `gemini-2.0-flash-lite`, `gemini-1.5-flash`, `gemini-1.5-flash-latest`, `gemini-pro`. Missing API key or any error falls back silently to the original text with `was_translated=False`.
+**Gemini モデル選択** (`src/translator.py`) は実行時に `list_models()` を呼び出し、`generateContent` をサポートする最初のモデルを選択します。優先順位: `gemini-2.0-flash`、`gemini-2.0-flash-lite`、`gemini-1.5-flash`、`gemini-1.5-flash-latest`、`gemini-pro`。API キーがない場合やエラーが発生した場合は、`was_translated=False` で元のテキストに静かにフォールバックします。
 
-**NCBI rate limiting**: 0.4 s delay between requests; all calls include `User-Agent`, `tool`, and `email` params as required by NCBI policy (violations cause 403 IP blocks).
+**NCBI レート制限**: リクエスト間に 0.4 秒の遅延を設けています。NCBI ポリシーに従い、全リクエストに `User-Agent`、`tool`、`email` パラメータを含めてください（違反すると 403 IP ブロックが発生します）。
 
-**Slack Block Kit limits**: text fields are truncated to 2900 chars max per block.
+**Slack Block Kit 制限**: テキストフィールドはブロックあたり最大 2900 文字に切り詰められます。
 
-## Testing Philosophy
+## テスト方針
 
-Prefer real API calls over mocks. Integration tests in `tests/test_integration.py` hit live NCBI, Gemini, and Slack endpoints and are the source of truth for correctness. Unit tests in the other test files are acceptable for pure logic (XML parsing, Block Kit payload structure, truncation), but should not mock external HTTP calls when the real endpoint is reasonably accessible.
+モックよりも実際の API 呼び出しを優先してください。`tests/test_integration.py` の統合テストは NCBI・Gemini・Slack の実エンドポイントに接続し、正確性の最終判断基準となります。他のテストファイルのユニットテストは、純粋なロジック（XML パース、Block Kit ペイロード構造、文字列切り詰め）に対しては許容されますが、実エンドポイントが利用可能な場合は外部 HTTP 呼び出しをモックすべきではありません。
 
-Integration tests skip gracefully when secrets are absent (`pytest.skip`) — never fail hard due to missing env vars.
+統合テストはシークレットが存在しない場合に `pytest.skip` で穏やかにスキップします — 環境変数の欠如でテストが失敗してはいけません。
 
 ## CI/CD
 
-- **`test_integration.yml`**: runs on every push/PR — unit tests always, integration tests + debug Slack post when secrets are available.
-- **`pubmed_notify.yml`**: scheduled cron (Mon/Tue 00:00 UTC) + `workflow_dispatch` with `schedule_day` input.
+- **`test_integration.yml`**: 全プッシュ・PR で実行 — ユニットテストは常に実行、シークレットがある場合は統合テストとデバッグ Slack 投稿も実行。
+- **`pubmed_notify.yml`**: cron スケジュール（月・火 00:00 UTC）+ `schedule_day` 入力付きの `workflow_dispatch`。
 
-Required secrets: `SLACK_WEBHOOK_URL` (mandatory), `GEMINI_API_KEY` (optional; disables translation if absent).
+必要なシークレット: `SLACK_WEBHOOK_URL`（必須）、`GEMINI_API_KEY`（任意・未設定の場合は翻訳が無効化されます）。
