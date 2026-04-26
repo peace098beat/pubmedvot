@@ -16,7 +16,7 @@ dev = [
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: marks tests as integration tests requiring real API keys",
+    "api: real API connectivity tests (require live credentials; auto-run on GITHUB_ACTIONS=true or --run-api)",
 ]
 
 [tool.ruff]
