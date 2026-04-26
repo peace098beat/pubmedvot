@@ -12,20 +12,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: '3.12'
-          cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: uv sync --extra dev
 
       - name: Run unit tests (no API)
         # Exit code 5 = no tests collected. Currently there are no
         # non-api tests; treat that as success rather than failure so this
         # job stays green until pure-logic unit tests are added.
-        run: python3 -m pytest tests/ -v -m "not api" || test $? -eq 5
+        run: uv run pytest tests/ -v -m "not api" || test $? -eq 5
 
   api:
     runs-on: ubuntu-latest
@@ -33,14 +32,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: '3.12'
-          cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: uv sync --extra dev
 
       - name: Run API connectivity tests
         env:
@@ -48,4 +46,4 @@ jobs:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           # GITHUB_ACTIONS=true is auto-injected by GitHub; conftest.py uses it
           # to switch into force-run mode (missing keys => fail, not skip).
-        run: python3 -m pytest tests/ -v -m "api"
+        run: uv run pytest tests/ -v -m "api"
