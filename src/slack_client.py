@@ -1,7 +1,6 @@
 """Slack Block Kit webhook client."""
 import logging
 from datetime import datetime
-from typing import List, Tuple
 
 import requests
 
@@ -19,11 +18,11 @@ def _truncate(text: str, max_len: int = _MAX_TEXT_LEN) -> str:
 
 
 def build_blocks(
-    articles: List[Article],
+    articles: list[Article],
     topic: str,
     translated: bool,
     debug: bool = False,
-) -> List[dict]:
+) -> list[dict]:
     today = datetime.now().strftime("%Y-%m-%d")
     label = "[DEBUG] " if debug else ""
     translation_note = "（日本語翻訳済み）" if translated else "（原文）"
@@ -80,7 +79,7 @@ def build_blocks(
 
 def send_to_slack(
     webhook_url: str,
-    articles: List[Article],
+    articles: list[Article],
     topic: str,
     translated: bool,
     debug: bool = False,

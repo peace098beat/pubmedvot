@@ -8,6 +8,16 @@ from src.slack_client import send_to_slack
 from src.translator import translate_to_japanese
 
 
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if value:
+        return value
+    msg = f"{name} is not set"
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        pytest.fail(msg + " (required on GitHub Actions)")
+    pytest.skip(msg + " (set it locally to run this test)")
+
+
 @pytest.mark.api
 def test_pubmed_search():
     articles = search_pubmed("sleep", max_results=1, days_back=7)
@@ -19,6 +29,7 @@ def test_pubmed_search():
 
 @pytest.mark.api
 def test_gemini_translate():
+    _require_env("GEMINI_API_KEY")
     text, ok = translate_to_japanese("This is a test.")
     assert ok is True
     assert isinstance(text, str)
@@ -26,7 +37,9 @@ def test_gemini_translate():
 
 @pytest.mark.api
 def test_slack_send():
-    webhook = os.environ["SLACK_WEBHOOK"]
-    article = Article(pmid="1", title="Test", authors=[], abstract="Test abstract.", pub_date="2024-01-01")
+    webhook = _require_env("SLACK_WEBHOOK")
+    article = Article(
+        pmid="1", title="Test", authors=[], abstract="Test abstract.", pub_date="2024-01-01"
+    )
     ok = send_to_slack(webhook, [article], topic="Test", translated=False, debug=True)
     assert ok is True

@@ -3,7 +3,6 @@ import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 import requests
 
@@ -24,7 +23,7 @@ _HEADERS = {
 class Article:
     pmid: str
     title: str
-    authors: List[str]
+    authors: list[str]
     abstract: str
     pub_date: str
     url: str = field(init=False)
@@ -39,7 +38,7 @@ def _date_range_filter(days_back: int) -> str:
     return f"{start.strftime('%Y/%m/%d')}:{end.strftime('%Y/%m/%d')}[pdat]"
 
 
-def search_pubmed(query: str, max_results: int = 10, days_back: int = 7) -> List[Article]:
+def search_pubmed(query: str, max_results: int = 10, days_back: int = 7) -> list[Article]:
     date_filter = _date_range_filter(days_back)
     full_query = f"({query}) AND {date_filter}"
 
@@ -51,7 +50,7 @@ def search_pubmed(query: str, max_results: int = 10, days_back: int = 7) -> List
     return _efetch(pmids)
 
 
-def _esearch(query: str, retmax: int) -> List[str]:
+def _esearch(query: str, retmax: int) -> list[str]:
     params = {
         **_NCBI_PARAMS,
         "db": "pubmed",
@@ -73,7 +72,7 @@ def _esearch(query: str, retmax: int) -> List[str]:
     return data.get("esearchresult", {}).get("idlist", [])
 
 
-def _efetch(pmids: List[str]) -> List[Article]:
+def _efetch(pmids: list[str]) -> list[Article]:
     params = {
         **_NCBI_PARAMS,
         "db": "pubmed",
@@ -87,7 +86,7 @@ def _efetch(pmids: List[str]) -> List[Article]:
     return _parse_xml(resp.text)
 
 
-def _parse_xml(xml_text: str) -> List[Article]:
+def _parse_xml(xml_text: str) -> list[Article]:
     root = ET.fromstring(xml_text)
     articles = []
     for article_elem in root.findall(".//PubmedArticle"):
@@ -126,7 +125,7 @@ def _collect_abstract(article_elem) -> str:
     return " ".join(parts)
 
 
-def _collect_authors(article_elem) -> List[str]:
+def _collect_authors(article_elem) -> list[str]:
     authors = []
     for author in article_elem.findall(".//Author"):
         last = _text(author, "LastName")

@@ -11,23 +11,24 @@
 依存関係の管理には **uv**、リント・フォーマットには **ruff**、テストには **pytest** を使用します。`pip install` や `venv` は使わず、常に `uv` を使用してください。
 
 ```bash
-uv sync --extra dev          # dev を含む全依存関係をインストール
-uv run pytest tests/ -v      # ユニットテストを全て実行
-uv run pytest tests/test_integration.py -v -m integration  # 実API テスト
-uv run ruff check src/ tests/  # リント
-uv run ruff format src/ tests/ # フォーマット
+uv sync --extra dev                                  # dev を含む全依存関係をインストール
+uv run pytest tests/ -v                              # api 以外のテストのみ（api はローカルでは skip）
+uv run pytest tests/ -v --run-api                    # 実 API テストも実行（要シークレット）
+uv run pytest tests/ -v -m "not api"                 # ユニットテスト相当のみを明示実行
+uv run ruff check src/ tests/                        # リント
+uv run ruff format src/ tests/                       # フォーマット
 ```
 
 単一のテストファイルまたはテストを実行する場合:
 ```bash
-uv run pytest tests/test_pubmed.py -v
-uv run pytest tests/test_pubmed.py::TestSearchPubMed::test_returns_articles -v
+uv run pytest tests/test_clients.py -v --run-api
+uv run pytest tests/test_clients.py::test_pubmed_search -v --run-api
 ```
 
 ローカルでパイプラインを実行する場合（シークレットが必要）:
 ```bash
-SCHEDULE_DAY=monday SLACK_WEBHOOK_URL=... GEMINI_API_KEY=... uv run python -m src.main
-DEBUG_MODE=true SCHEDULE_DAY=monday SLACK_WEBHOOK_URL=... uv run python -m src.main
+SCHEDULE_DAY=monday SLACK_WEBHOOK=... GEMINI_API_KEY=... uv run python -m src.main
+DEBUG_MODE=true SCHEDULE_DAY=monday SLACK_WEBHOOK=... uv run python -m src.main
 ```
 
 ## Git ワークフロー
@@ -42,7 +43,7 @@ DEBUG_MODE=true SCHEDULE_DAY=monday SLACK_WEBHOOK_URL=... uv run python -m src.m
 パイプラインは `src/main.py` による線形4段階のオーケストレーションです:
 
 ```
-config/settings.yaml  +  環境変数 (SCHEDULE_DAY, SLACK_WEBHOOK_URL, GEMINI_API_KEY)
+config/settings.yaml  +  環境変数 (SCHEDULE_DAY, SLACK_WEBHOOK, GEMINI_API_KEY)
          ↓
 src/pubmed_client.py   – NCBI E-utilities (esearch JSON → efetch XML → Article dataclass)
          ↓
@@ -63,13 +64,19 @@ src/slack_client.py    – Slack Block Kit (build_blocks → webhook URL へ POS
 
 ## テスト方針
 
-モックよりも実際の API 呼び出しを優先してください。`tests/test_integration.py` の統合テストは NCBI・Gemini・Slack の実エンドポイントに接続し、正確性の最終判断基準となります。他のテストファイルのユニットテストは、純粋なロジック（XML パース、Block Kit ペイロード構造、文字列切り詰め）に対しては許容されますが、実エンドポイントが利用可能な場合は外部 HTTP 呼び出しをモックすべきではありません。
+モックよりも実際の API 呼び出しを優先してください。`tests/test_clients.py` の API 疎通テストは NCBI・Gemini・Slack の実エンドポイントに接続し、正確性の最終判断基準となります。他のテストファイルのユニットテストは、純粋なロジック（XML パース、Block Kit ペイロード構造、文字列切り詰め）に対しては許容されますが、実エンドポイントが利用可能な場合は外部 HTTP 呼び出しをモックすべきではありません。
 
-統合テストはシークレットが存在しない場合に `pytest.skip` で穏やかにスキップします — 環境変数の欠如でテストが失敗してはいけません。
+### API 疎通テスト（`@pytest.mark.api`）
+
+- **ローカル**: デフォルト skip。任意実行する場合は `--run-api` を渡す。シークレット欠如時は穏やかに `pytest.skip`（開発体験を壊さない）。
+- **GitHub Actions**: `GITHUB_ACTIONS=true` を検出して **強制実行**。`SLACK_WEBHOOK` / `GEMINI_API_KEY` が欠如している場合は **`pytest.fail`**（CI ではキー必須を担保するため、skip ではなく失敗にする）。
+
+判定ロジックは `tests/conftest.py` と `tests/test_clients.py::_require_env`。設計根拠は `agents/design-rationale.md` を参照。
 
 ## CI/CD
 
-- **`test_integration.yml`**: 全プッシュ・PR で実行 — ユニットテストは常に実行、シークレットがある場合は統合テストとデバッグ Slack 投稿も実行。
+- **`test_integration.yml`**: 全プッシュ・PR で実行 — `unit` ジョブで `-m "not api"` を常時実行、`api` ジョブは `needs: unit` 後に secrets 注入で API 疎通テストを実行。
 - **`pubmed_notify.yml`**: cron スケジュール（月・火 00:00 UTC）+ `schedule_day` 入力付きの `workflow_dispatch`。
 
-必要なシークレット: `SLACK_WEBHOOK_URL`（必須）、`GEMINI_API_KEY`（任意・未設定の場合は翻訳が無効化されます）。
+必要なシークレット: `SLACK_WEBHOOK`（必須）、`GEMINI_API_KEY`（必須・CI の `api` ジョブで使用）。
+ローカル実行時に翻訳をスキップしたい場合は `GEMINI_API_KEY` を未設定にすると `translate_to_japanese` が静かにフォールバックします。
