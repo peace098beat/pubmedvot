@@ -22,7 +22,10 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run unit tests (no API)
-        run: python3 -m pytest tests/ -v -m "not api"
+        # Exit code 5 = no tests collected. Currently there are no
+        # non-api tests; treat that as success rather than failure so this
+        # job stays green until pure-logic unit tests are added.
+        run: python3 -m pytest tests/ -v -m "not api" || test $? -eq 5
 
   api:
     runs-on: ubuntu-latest
